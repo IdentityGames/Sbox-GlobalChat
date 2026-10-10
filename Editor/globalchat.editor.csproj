@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>14</LangVersion>
+    <AssemblyName>editor_global_chat.editor</AssemblyName>
+    <RootNamespace>Editor.GlobalChat</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>1591;1701;1702</NoWarn>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <SandboxRoot Condition="'$(SandboxRoot)' == ''">../../../../sbox-public/game</SandboxRoot>
+  </PropertyGroup>
+  <ItemGroup>
+	<Analyzer Include="$(SandboxRoot)/bin/managed/Sandbox.Generator.dll" />
+    <Using Include="Sandbox.Internal.GlobalToolsNamespace" Static="true" />
+    <Using Include="Sandbox.Internal.GlobalGameNamespace" Static="true" />
+    <Reference Include="$(SandboxRoot)/bin/managed/Sandbox.System.dll" />
+    <Reference Include="$(SandboxRoot)/bin/managed/Sandbox.Engine.dll" />
+    <Reference Include="$(SandboxRoot)/bin/managed/Sandbox.Tools.dll" />
+    <Reference Include="$(SandboxRoot)/bin/managed/Sandbox.Reflection.dll" />
+    <Reference Include="$(SandboxRoot)/bin/managed/Sandbox.Filesystem.dll" />
+    <Reference Include="$(SandboxRoot)/bin/managed/Sandbox.Compiling.dll" />
+    <Reference Include="$(SandboxRoot)/bin/managed/Sandbox.Bind.dll" />
+    <Reference Include="$(SandboxRoot)/bin/managed/Microsoft.AspNetCore.Components.dll" />
+    <Reference Include="$(SandboxRoot)/.vs/output/Base Editor Library.dll" />
+  </ItemGroup>
+</Project>

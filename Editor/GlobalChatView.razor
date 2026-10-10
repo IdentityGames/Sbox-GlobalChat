@@ -1,0 +1,258 @@
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Rendering
+@using Sandbox
+@using Sandbox.UI
+@using System
+@using System.Linq
+@namespace Editor.GlobalChat
+@inherits Panel
+
+<root class="editor-global-chat">
+	<div class="chat-grain" @ref="grain"></div>
+	<div class="global-conversation">
+		<div id="chat-conversation-heading" class="conversation-heading">
+			<label>@(Session.Channel is null ? "Connecting to global chat…" : $"{Session.Channel.MemberCount} here · say hello or share your party")</label>
+			<Sandbox.UI.Button Icon="refresh" onclick=@Reconnect tooltip="Reconnect to global chat" />
+			<Sandbox.UI.Button id="chat-settings-toggle" Icon="settings" onclick=@ToggleSettings tooltip="Mention settings" />
+			<Sandbox.UI.Button id="chat-members-toggle" class=@(MembersVisible ? "active" : "") Icon="group" onclick=@(() => MembersVisible = !MembersVisible) tooltip=@(MembersVisible ? "Hide users in chat" : "Show users in chat") />
+		</div>
+		@if ( settingsOpen )
+		{
+			<div class="chat-settings">
+				<Sandbox.UI.Checkbox id="chat-popups" Value=@GlobalChatWindow.MentionPopups ValueChanged=@((bool value) => { GlobalChatWindow.MentionPopups = value; })>Mention popups</Sandbox.UI.Checkbox>
+				<Sandbox.UI.Checkbox id="chat-sounds" Value=@GlobalChatWindow.MentionSounds ValueChanged=@((bool value) => { GlobalChatWindow.MentionSounds = value; })>Mention sound</Sandbox.UI.Checkbox>
+			</div>
+		}
+		@if ( Session.Connecting ) { <div class="chat-notice">Joining global chat…</div> }
+		@if ( !string.IsNullOrEmpty( Session.Error ?? Host.PartyError ) ) { <div class="chat-notice error">@(Session.Error ?? Host.PartyError)</div> }
+		<div class="chat-messages" @ref="messageList">
+			@if ( DisplayMessages.Count == 0 )
+			{
+				<div class="chat-empty"><icon>forum</icon><label>Say hello. Find your next group.</label></div>
+			}
+			@foreach ( var message in DisplayMessages.Where( x => !x.Sender.IsBlocked ) )
+			{
+				<div class="chat-message" @key=message.Id>
+					<div class="chat-avatar" style="background-image: url(avatar:@message.Sender.Id)" onclick=@((PanelEvent e) => ShowUserActions( message.Sender, e.This )) onrightclick=@(() => InsertMention( message.Sender ))></div>
+					<div class="chat-message-body">
+						<label id=@($"chat-name-{message.Id}") class="chat-name" onclick=@((PanelEvent e) => ShowUserActions( message.Sender, e.This )) onrightclick=@(() => InsertMention( message.Sender ))>@message.Sender.Name</label>
+						@if ( message.PartyId == 0 ) { <label>@message.Text</label> }
+						else
+						{
+							var entry = Session.GetInvitation( message.PartyId );
+							<div class="party-invitation">
+								<div class="invitation-summary">
+									<label class="invitation-name">@(entry?.Name ?? "Party invitation")</label>
+									<label class="invitation-details">@(string.IsNullOrWhiteSpace( entry?.GameTitle ) ? "Deciding together" : entry.GameTitle)</label>
+									<label class="invitation-details">@(entry is null ? "Checking party…" : !entry.Available ? "Party unavailable · ended or could not be reached" : $"{entry.Members}/{entry.Capacity} players · {(entry.IsFull ? "Party full" : entry.IsPlaying ? "In game" : "Looking for players")}")</label>
+								</div>
+								<Sandbox.UI.Button class="primary" disabled=@(!CanJoin( message.PartyId )) onclick=@(() => JoinParty( message.PartyId )) tooltip="Leave your current party before joining another.">@(PartyRoom.Current?.Id.ValueUnsigned == message.PartyId ? "Your party" : "Join party")</Sandbox.UI.Button>
+							</div>
+						}
+					</div>
+				</div>
+			}
+		</div>
+		<div class="chat-composer-container">
+			<div class="chat-composer">
+				<Sandbox.UI.TextEntry id="chat-input" @ref="input" Text=@Session.Draft OnTextEdited=@SaveDraft MaxLength=@(400) Placeholder="Say hello…" onsubmit=@Submit />
+				<Sandbox.UI.Button Icon="send" disabled=@(!Session.CanSend) onclick=@Submit tooltip="Send message" />
+			</div>
+			<div class="chat-actions">
+				@if ( PartyRoom.Current is { } party )
+				{
+					<label>@party.MemberCount in your party</label>
+					@if ( party.Owner.IsMe ) { <Sandbox.UI.Button Icon="campaign" disabled=@(!Session.CanInviteParty) onclick=@InviteParty tooltip="Post an invitation so anyone in global chat can join">Post party invite</Sandbox.UI.Button> }
+				}
+			</div>
+		</div>
+	</div>
+	@if ( MembersVisible )
+	{
+		<div id="chat-member-list" class="chat-members">
+			<div class="people-heading"><label>In chat</label><label>@(Session.Channel?.MemberCount ?? 0)</label></div>
+			<div class="chat-people">
+				@foreach ( var member in Members )
+				{
+					<button id=@($"chat-member-{member.Id}") class="chat-person" @key=member.Id onclick=@((PanelEvent e) => ShowUserActions( member, e.This )) onrightclick=@(() => InsertMention( member )) tooltip="User actions. Right-click to add a mention.">
+						<div class="chat-avatar" style="background-image: url(avatar:@member.Id)"></div><label>@member.Name</label>
+					</button>
+				}
+			</div>
+		</div>
+		}
+	@if ( actionUser is { } user )
+	{
+		<div id="chat-user-dismiss" class="chat-user-dismiss" onclick=@DismissUserActions onrightclick=@DismissUserActions></div>
+		<div id="chat-user-actions" class="chat-user-actions" @ref="userActions">
+			<div class="chat-user-heading"><label>@user.Name</label><Sandbox.UI.Button Icon="close" onclick=@DismissUserActions tooltip="Close user actions" /></div>
+			<Sandbox.UI.Button id="chat-user-steam" Icon="open_in_new" onclick=@(() => OpenProfile( $"https://steamcommunity.com/profiles/{user.Id}" ))>Steam profile</Sandbox.UI.Button>
+			<Sandbox.UI.Button id="chat-user-website" Icon="language" onclick=@(() => OpenProfile( $"https://sbox.game/u/{user.Id}" ))>s&amp;box website profile</Sandbox.UI.Button>
+			<Sandbox.UI.Button id="chat-user-mention" Icon="alternate_email" disabled=@(input.Text.Length + GetMentionSuffix( user ).Length > 400) tooltip="Add a mention to the draft. Make space first if the message is full." onclick=@(() => InsertMention( user ))>Mention in chat</Sandbox.UI.Button>
+		</div>
+	}
+</root>
+
+@code
+{
+	internal GlobalChatSession Session { get; set; }
+	internal GlobalChatWindow Host { get; set; }
+	internal System.Collections.Generic.List<GlobalChatSession.ChatLine> PreviewMessages { get; set; }
+	System.Collections.Generic.List<GlobalChatSession.ChatLine> DisplayMessages => PreviewMessages ?? Session.Messages;
+	Panel messageList;
+	Panel grain;
+	Panel userActions;
+	Friend? actionUser;
+	Vector2 actionAnchor;
+	Sandbox.UI.TextEntry input;
+	bool settingsOpen, scrollAfterRender;
+	bool membersVisible = EditorCookie.Get( "GlobalChat.MembersVisible", true );
+	internal bool MembersVisible
+	{
+		get => membersVisible;
+		set
+		{
+			if ( membersVisible == value ) return;
+			membersVisible = value;
+			EditorCookie.Set( "GlobalChat.MembersVisible", value );
+			DismissUserActions();
+		}
+	}
+	internal bool SettingsOpen
+	{
+		get => settingsOpen;
+		set { settingsOpen = value; StateHasChanged(); }
+	}
+	int renderedRevision = -1;
+	Friend[] Members => Session.Channel?.Members.Where( x => !x.IsBlocked ).OrderBy( x => x.Name, StringComparer.OrdinalIgnoreCase ).ToArray() ?? [];
+
+	public GlobalChatView()
+	{
+		AcceptsFocus = true;
+		StyleSheet.AddInline( GlobalChatTheme.Styles, "editor-global-chat-theme" );
+	}
+
+	public override void OnHotloaded()
+	{
+		using var scope = Session.EnterMenuScope();
+		// Recreate Razor references and event closures after a template change.
+		EngineChatBridge.Invoke( EngineChatBridge.RequireMethod( typeof( Panel ), "ClearRenderTree" ), this );
+		base.OnHotloaded();
+		StyleSheet.AddInline( GlobalChatTheme.Styles, "editor-global-chat-theme" );
+		renderedRevision = -1;
+		StateHasChanged();
+	}
+
+	void SaveDraft( string text )
+	{
+		Session.Draft = text;
+		EditorCookie.Set( "GlobalChat.Draft", text );
+	}
+
+	void Submit()
+	{
+		using var scope = Session.EnterMenuScope();
+		if ( Session.Send( input.Text ) )
+		{
+			input.Text = "";
+			SaveDraft( "" );
+			ScrollToLatest();
+		}
+		input.Focus();
+	}
+
+	internal void ScrollToLatest()
+	{
+		scrollAfterRender = true;
+		StateHasChanged();
+	}
+
+	internal void ShowUserActions( Friend friend, Panel source = null )
+	{
+		actionUser = friend;
+		actionAnchor = source is null ? new Vector2( Box.Rect.Width - 232, 64 ) * ScaleFromScreen
+			: (source.Box.Rect.BottomLeft - Box.Rect.Position) * ScaleFromScreen;
+		Focus();
+		StateHasChanged();
+	}
+
+	internal void DismissUserActions()
+	{
+		actionUser = null;
+		StateHasChanged();
+	}
+
+	void OpenProfile( string url )
+	{
+		System.Diagnostics.Process.Start( new System.Diagnostics.ProcessStartInfo( url ) { UseShellExecute = true } );
+		DismissUserActions();
+	}
+
+	public override void OnButtonTyped( ButtonEvent e )
+	{
+		if ( e.Button != "escape" || actionUser is null ) { base.OnButtonTyped( e ); return; }
+		DismissUserActions();
+		input.Focus();
+		e.StopPropagation = true;
+	}
+	void ToggleSettings() { settingsOpen = !settingsOpen; StateHasChanged(); }
+	void Reconnect() { Session.Close(); Session.Open(); }
+
+	void InviteParty()
+	{
+		using var scope = Session.EnterMenuScope();
+		Session.InviteParty();
+	}
+
+	bool CanJoin( ulong id ) => !Host.PartyBusy && PartyRoom.Current is null && Session.GetInvitation( id ) is { Available: true, IsFull: false };
+	void JoinParty( ulong id ) { _ = Host.JoinParty( id ); }
+
+	void InsertMention( Friend member )
+	{
+		var mention = GetMentionSuffix( member );
+		// Keep the draft intact when the full mention cannot fit.
+		if ( input.Text.Length + mention.Length > 400 ) return;
+		input.Text += mention;
+		SaveDraft( input.Text );
+		DismissUserActions();
+		input.Focus();
+	}
+
+	string GetMentionSuffix( Friend member )
+	{
+		var separator = input.Text.Length == 0 || char.IsWhiteSpace( input.Text[^1] ) ? "" : " ";
+		return separator + "@" + member.Name + " ";
+	}
+
+	public override void Tick()
+	{
+		base.Tick();
+		if ( actionUser is null || !userActions.IsValid() ) return;
+		var bounds = Box.Rect.Size * ScaleFromScreen;
+		var size = userActions.Box.Rect.Size * ScaleFromScreen;
+		userActions.Style.Left = Math.Clamp( actionAnchor.x, 8, Math.Max( 8, bounds.x - size.x - 8 ) );
+		userActions.Style.Top = Math.Clamp( actionAnchor.y + 4, 8, Math.Max( 8, bounds.y - size.y - 8 ) );
+	}
+
+	protected override void OnAfterTreeRender( bool firstTime )
+	{
+		base.OnAfterTreeRender( firstTime );
+		// SCSS url() textures load lazily in the drawing context. Resolve this menu asset
+		// explicitly so editor and play-mode frames keep the same background texture.
+		using var scope = Session.EnterMenuScope();
+		grain.Style.BackgroundImage = Texture.Load( "/ui/panel-paper.png" );
+		messageList.PreferScrollToBottom = true;
+		if ( firstTime || scrollAfterRender || (renderedRevision != Session.Revision && messageList.IsScrollAtBottom) ) messageList.TryScrollToBottom();
+		renderedRevision = Session.Revision;
+		scrollAfterRender = false;
+	}
+
+	protected override int BuildHash()
+	{
+		var members = new HashCode();
+		foreach ( var member in Members ) { members.Add( member.Id ); members.Add( member.Name ); }
+		return HashCode.Combine( HashCode.Combine( Session.Revision, PreviewMessages ), Session.InvitationRevision, Session.Connecting, Session.Error, Host.PartyError,
+			HashCode.Combine( Session.CanSend, Session.CanInviteParty, PartyRoom.Current?.Id, PartyRoom.Current?.MemberCount, PartyRoom.Current?.Owner.Id, Host.PartyBusy ),
+			members.ToHashCode(), HashCode.Combine( settingsOpen, MembersVisible, GlobalChatWindow.MentionPopups, GlobalChatWindow.MentionSounds ) );
+	}
+}

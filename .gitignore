@@ -1,0 +1,7 @@
+**/bin/
+**/obj/
+**/TestResults/
+Editor/editor_global_chat.editor.csproj
+Editor/Properties/
+!Tests/GlobalChat.Tests.csproj
+!Editor/globalchat.editor.csproj
