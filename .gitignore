@@ -3,5 +3,6 @@
 **/TestResults/
 Editor/editor_global_chat.editor.csproj
 Editor/Properties/
+Editor/Validation/
 !Tests/GlobalChat.Tests.csproj
 !Editor/globalchat.editor.csproj

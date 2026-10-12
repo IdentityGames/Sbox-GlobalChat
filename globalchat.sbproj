@@ -1,7 +1,15 @@
 {
-  "Title": "Editor Global Chat",
+  "Title": "Global Chat",
   "Type": "library",
-  "Org": "local",
-  "Ident": "editor_global_chat",
-  "Schema": 1
+  "Org": "thedimin",
+  "Ident": "global_chat",
+  "Schema": 1,
+  "IncludeSourceFiles": false,
+  "Resources": null,
+  "PublishExclude": "// Build output and intermediate files\nbin/*\n*/bin/*\nobj/*\n*/obj/*\nTestResults/*\n*/TestResults/*\n// Unit tests and local editor checks\nTests/*\nUnitTest/*\nEditor/Validation/*\nEditor/Properties/*\n// Local project and repository files\n.*\n*.csproj\n*.sln\n*.slnx\n*.user",
+  "PackageReferences": [],
+  "EditorReferences": null,
+  "Mounts": null,
+  "IsStandaloneOnly": false,
+  "Metadata": {}
 }

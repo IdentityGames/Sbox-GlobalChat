@@ -9,6 +9,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <SandboxRoot Condition="'$(SandboxRoot)' == ''">../../../../sbox-public/game</SandboxRoot>
   </PropertyGroup>
+  <ItemGroup Condition="'$(IncludeEditorValidation)' == 'true'">
+    <Compile Include="../Tests/Editor/**/*.cs" Link="Validation/%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
   <ItemGroup>
 	<Analyzer Include="$(SandboxRoot)/bin/managed/Sandbox.Generator.dll" />
     <Using Include="Sandbox.Internal.GlobalToolsNamespace" Static="true" />

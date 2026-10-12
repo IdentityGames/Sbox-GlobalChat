@@ -6,6 +6,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
+    <!-- Live editor checks need an initialized s&box editor, not the MSTest host. -->
+    <Compile Remove="Editor/**/*.cs" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="MSTest.TestAdapter" Version="3.10.5" />
     <PackageReference Include="MSTest.TestFramework" Version="3.10.5" />

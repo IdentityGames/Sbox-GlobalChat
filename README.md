@@ -28,9 +28,13 @@ Chat stays connected while its dock is open, including when another tab is selec
 
 ## Compatibility and tests
 
+The `PublishExclude` rules in `globalchat.sbproj` keep tests, validation copies, and build output out of the package. They require an editor build with `PublishExclude` support. Older editors ignore this field. Chat source, the project config, this README, and the license notice remain in the package.
+
 The library uses reflection to access the engine's menu chat service. It uses the normal `dev=0` global channel and matches the engine API and network versions. Changes to private engine APIs can require a library update.
 
-The `editor_global_chat` MCP tools provide connection status, captures, local alert previews, and input checks. These tools do not send public chat messages. Sound and popup previews passed in the editor; party actions with other users still need a live test.
+The installed `editor_global_chat` MCP tools provide connection status, opening and closing, docking, and alert settings. These tools do not send public chat messages.
+
+Live editor validation sources are in `Tests/Editor/`. They include input checks, captures, local alert previews, and a private party check. They are excluded from the installed library and the MSTest runner. See [Tests/Editor/README.md](Tests/Editor/README.md) for local setup.
 
 Run the mention policy tests from this repository:
 
